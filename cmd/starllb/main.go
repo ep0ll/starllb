@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ep0ll/starllb/dockerfile"
 	"github.com/ep0ll/starllb/llb"
 	starllbruntime "github.com/ep0ll/starllb/starlark"
 	bkllb "github.com/moby/buildkit/client/llb"
@@ -43,7 +44,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `starllb - Starlark bindings for BuildKit LLB
+	fmt.Fprintf(os.Stderr, `starllb - Starlark bindings for BuildKit LLB + Dockerfile-as-code
 
 Usage:
   starllb run <script.star> [flags]
@@ -53,7 +54,17 @@ Flags for run:
   -o, --output   Write LLB definition (protobuf) to file
   -f, --func     Function name to call (default: "build")
 
-Example script.star:
+High-level (Dockerfile-as-code) example:
+
+  def build():
+      s = from_("alpine:3.20")
+      s = s.run("apk add --no-cache curl")
+      s = s.copy(src=".", dest="/app")
+      s = s.workdir("/app")
+      s = s.entrypoint(["/app/server"])
+      return s
+
+Low-level (direct LLB) example:
 
   def build():
       alpine = llb.image("docker.io/library/alpine:latest")
@@ -110,8 +121,10 @@ func runCmd(args []string) {
 		state = v.Underlying()
 	case *llb.ExecState:
 		state = v.Underlying().Root()
+	case *dockerfile.Stage:
+		state = v.Underlying().Underlying()
 	default:
-		fmt.Fprintf(os.Stderr, "result must be llb.State or llb.ExecState, got %s\n", result.Type())
+		fmt.Fprintf(os.Stderr, "result must be dockerfile.Stage, llb.State or llb.ExecState, got %s\n", result.Type())
 		os.Exit(1)
 	}
 
